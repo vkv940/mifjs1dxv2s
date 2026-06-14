@@ -1,0 +1,327 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta name="robots" content="noindex,nofollow,noarchive">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Азимут и расстояние · Яндекс.Карты</title>
+<style>
+  :root{--bg:#0f1115;--panel:#171a21;--line:#262b36;--txt:#e7ebf3;--mut:#9aa3b2;--acc:#ffcc00;--acc2:#4f9cff;--bts:#ff5252;}
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%;font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif;background:var(--bg);color:var(--txt)}
+  #app{display:flex;flex-direction:column;height:100%}
+  header{padding:10px 14px;background:var(--panel);border-bottom:1px solid var(--line);display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+  header h1{font-size:15px;margin:0;font-weight:600;letter-spacing:.2px}
+  header .sub{font-size:11px;color:var(--mut)}
+  header .grow{flex:1}
+  header button.tgl{background:#222835;border:1px solid var(--line);color:var(--txt);border-radius:8px;padding:6px 11px;font-size:13px;cursor:pointer}
+  header button.tgl.on{border-color:var(--bts);color:#ffd0d0}
+  #map{flex:1;min-height:0}
+  .bar{display:flex;gap:8px;flex-wrap:wrap;padding:8px 14px;background:var(--panel);border-bottom:1px solid var(--line)}
+  .field{display:flex;align-items:center;gap:6px;background:#11141a;border:1px solid var(--line);border-radius:9px;padding:4px 8px;flex:1;min-width:200px}
+  .dot{width:12px;height:12px;border-radius:50%;flex:none}
+  .dot.a{background:var(--acc)} .dot.b{background:var(--acc2)}
+  .field input{flex:1;background:transparent;border:0;color:var(--txt);font-size:13px;outline:none}
+  .field button{background:#222835;border:1px solid var(--line);color:var(--txt);border-radius:7px;padding:4px 8px;font-size:12px;cursor:pointer}
+  .field button:hover{border-color:var(--acc2)}
+  #results{padding:10px 14px;background:var(--panel);border-top:1px solid var(--line);display:flex;gap:18px;flex-wrap:wrap;align-items:center}
+  .metric{display:flex;flex-direction:column}
+  .metric .k{font-size:11px;color:var(--mut);text-transform:uppercase;letter-spacing:.5px}
+  .metric .v{font-size:20px;font-weight:700}
+  .metric .v small{font-size:12px;color:var(--mut);font-weight:500}
+  .actions{margin-left:auto;display:flex;gap:8px}
+  .actions button{background:#222835;border:1px solid var(--line);color:var(--txt);border-radius:8px;padding:7px 12px;font-size:13px;cursor:pointer}
+  .actions button:hover{border-color:var(--acc)}
+  .hint{font-size:12px;color:var(--mut);padding:6px 14px;background:#11141a;border-bottom:1px solid var(--line)}
+  .compass{width:54px;height:54px;flex:none;position:relative}
+  .compass svg{width:100%;height:100%}
+  .toast{position:fixed;left:50%;bottom:16px;transform:translateX(-50%);background:#222835;border:1px solid var(--line);padding:8px 14px;border-radius:10px;font-size:13px;opacity:0;transition:.25s;pointer-events:none;z-index:9999}
+  .toast.show{opacity:1}
+  a{color:var(--acc2)}
+  #map .ymaps-2-1-79-map{background:#0b0d11}
+</style>
+</head>
+<body>
+<div id="gate" style="position:fixed;inset:0;z-index:99999;background:#0f1115;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:14px;font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif;color:#e7ebf3">
+  <div style="font-size:40px">🧭</div>
+  <div style="font-size:16px;font-weight:600">Азимут</div>
+  <div style="font-size:12px;color:#9aa3b2">Введите пароль для доступа</div>
+  <input id="gpw" type="password" autocomplete="off" style="background:#171a21;border:1px solid #262b36;color:#e7ebf3;border-radius:10px;padding:11px 14px;font-size:15px;width:220px;text-align:center;outline:none">
+  <button id="gbtn" style="background:#4f9cff;border:0;color:#001;font-weight:600;border-radius:10px;padding:11px 22px;font-size:15px;cursor:pointer">Войти</button>
+  <div id="gerr" style="display:none;color:#ff6b6b;font-size:12px">Неверный пароль</div>
+</div>
+<script>
+(function(){
+  var HASH="f5fc9fe8f0f40b8e601dd1d59fb55691ba71c96df1f1be6d9ec818c83508cc20";
+  function sha(s){return crypto.subtle.digest('SHA-256',new TextEncoder().encode(s)).then(function(b){return Array.prototype.map.call(new Uint8Array(b),function(x){return x.toString(16).padStart(2,'0')}).join('')});}
+  var g=document.getElementById('gate');
+  if(localStorage.getItem('az_auth')==='1'){g.parentNode.removeChild(g);return;}
+  document.documentElement.style.overflow='hidden';
+  var inp=document.getElementById('gpw'),btn=document.getElementById('gbtn'),err=document.getElementById('gerr');
+  function tryit(){sha((inp.value||'').trim()).then(function(h){if(h===HASH){localStorage.setItem('az_auth','1');document.documentElement.style.overflow='';g.parentNode.removeChild(g);}else{err.style.display='block';inp.value='';inp.focus();}});}
+  btn.onclick=tryit;inp.addEventListener('keydown',function(e){if(e.key==='Enter')tryit();});
+  setTimeout(function(){inp.focus();},100);
+})();
+</script>
+<div id="app">
+  <header>
+    <h1>🧭 Азимут и расстояние</h1>
+    <span class="sub">Яндекс.Карты · кликни две точки или введи адреса</span>
+    <span class="grow"></span>
+    <button id="btsBtn" class="tgl on" onclick="toggleBTS()">📡 Вышки МТС</button>
+  </header>
+  <div class="hint">Точка A — клик по карте (жёлтая), затем точка B (синяя). Перетаскивай маркеры. Красные точки — базовые станции МТС; приблизь карту, чтобы увидеть лучи азимутов антенн. Нажми на станцию — номер и азимуты.</div>
+  <div class="bar">
+    <div class="field"><span class="dot a"></span><input id="qa" placeholder="Адрес, координаты или № БС (напр. 32-00085)"><button onclick="searchPoint(0)">Найти</button></div>
+    <div class="field"><span class="dot b"></span><input id="qb" placeholder="Адрес, координаты или № БС"><button onclick="searchPoint(1)">Найти</button></div>
+  </div>
+  <div id="map"></div>
+  <div id="results">
+    <div class="compass" title="направление A→B">
+      <svg viewBox="0 0 100 100">
+        <circle cx="50" cy="50" r="46" fill="#11141a" stroke="#262b36" stroke-width="2"/>
+        <text x="50" y="16" fill="#9aa3b2" font-size="11" text-anchor="middle">С</text>
+        <text x="50" y="92" fill="#9aa3b2" font-size="11" text-anchor="middle">Ю</text>
+        <text x="11" y="54" fill="#9aa3b2" font-size="11" text-anchor="middle">З</text>
+        <text x="89" y="54" fill="#9aa3b2" font-size="11" text-anchor="middle">В</text>
+        <g id="needle" transform="rotate(0 50 50)">
+          <polygon points="50,12 45,52 55,52" fill="#ffcc00"/>
+          <polygon points="50,88 45,52 55,52" fill="#4f9cff"/>
+        </g>
+      </svg>
+    </div>
+    <div class="metric"><span class="k">Азимут A→B</span><span class="v" id="az">—</span></div>
+    <div class="metric"><span class="k">Обратный B→A</span><span class="v" id="azr">—</span></div>
+    <div class="metric"><span class="k">Расстояние</span><span class="v" id="dist">—</span></div>
+    <div class="actions">
+      <button onclick="useMyLocation()">📍 Моё место → A</button>
+      <button onclick="resetPoints()">↺ Сброс</button>
+    </div>
+  </div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script src="https://api-maps.yandex.ru/2.1/?apikey=1927f414-4acb-41e6-9e17-ba4a072b3068&lang=ru_RU"></script>
+<script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
+<script>
+let map, pts=[null,null], markers=[null,null], line=null, lineGlow=null, lineAnim=null;
+const colors=['#ffcc00','#4f9cff'];
+
+function toRad(d){return d*Math.PI/180;} function toDeg(r){return r*180/Math.PI;}
+function bearing(a,b){
+  const f1=toRad(a.lat),f2=toRad(b.lat),dl=toRad(b.lon-a.lon);
+  const y=Math.sin(dl)*Math.cos(f2);
+  const x=Math.cos(f1)*Math.sin(f2)-Math.sin(f1)*Math.cos(f2)*Math.cos(dl);
+  return (toDeg(Math.atan2(y,x))+360)%360;
+}
+function distance(a,b){
+  const R=6371008.8,f1=toRad(a.lat),f2=toRad(b.lat),df=toRad(b.lat-a.lat),dl=toRad(b.lon-a.lon);
+  const h=Math.sin(df/2)**2+Math.cos(f1)*Math.cos(f2)*Math.sin(dl/2)**2;
+  return 2*R*Math.asin(Math.sqrt(h));
+}
+function dest(lat,lon,az,distM){
+  const R=6371008.8,br=toRad(az),f1=toRad(lat),l1=toRad(lon),dr=distM/R;
+  const f2=Math.asin(Math.sin(f1)*Math.cos(dr)+Math.cos(f1)*Math.sin(dr)*Math.cos(br));
+  const l2=l1+Math.atan2(Math.sin(br)*Math.sin(dr)*Math.cos(f1),Math.cos(dr)-Math.sin(f1)*Math.sin(f2));
+  return [toDeg(f2),toDeg(l2)];
+}
+function cardinal(d){const n=['С','ССВ','СВ','ВСВ','В','ВЮВ','ЮВ','ЮЮВ','Ю','ЮЮЗ','ЮЗ','ЗЮЗ','З','ЗСЗ','СЗ','ССЗ'];return n[Math.round(d/22.5)%16];}
+function fmtDist(m){return m<1000?m.toFixed(0)+' м':(m/1000).toFixed(m<100000?2:1)+' км';}
+
+let tt;function toast(t){const e=document.getElementById('toast');e.textContent=t;e.classList.add('show');clearTimeout(tt);tt=setTimeout(()=>e.classList.remove('show'),2200);}
+
+function pin(i){
+  return new ymaps.Placemark([pts[i].lat,pts[i].lon],{},{
+    draggable:true,
+    iconLayout:'default#imageWithContent',
+    iconImageHref:'data:image/svg+xml;utf8,'+encodeURIComponent(
+      '<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22"><circle cx="11" cy="11" r="8" fill="'+colors[i]+'" stroke="#0f1115" stroke-width="3"/></svg>'),
+    iconImageSize:[22,22], iconImageOffset:[-11,-11]
+  });
+}
+
+function setPoint(i,lat,lon){
+  pts[i]={lat,lon};
+  if(markers[i]){ markers[i].geometry.setCoordinates([lat,lon]); }
+  else{
+    markers[i]=pin(i);
+    markers[i].events.add('drag',e=>{const c=e.get('target').geometry.getCoordinates();pts[i]={lat:c[0],lon:c[1]};draw();});
+    map.geoObjects.add(markers[i]);
+  }
+  draw();
+}
+
+function clearLine(){
+  if(lineAnim){clearInterval(lineAnim);lineAnim=null;}
+  if(line){map.geoObjects.remove(line);line=null;}
+  if(lineGlow){map.geoObjects.remove(lineGlow);lineGlow=null;}
+}
+function draw(){
+  clearLine();
+  if(pts[0]&&pts[1]){
+    const co=[[pts[0].lat,pts[0].lon],[pts[1].lat,pts[1].lon]];
+    lineGlow=new ymaps.Polyline(co,{},{strokeColor:'#2f7bff',strokeWidth:12,strokeOpacity:0.22});
+    map.geoObjects.add(lineGlow);
+    line=new ymaps.Polyline(co,{},{strokeColor:'#3d8bff',strokeWidth:4,strokeStyle:'shortdash',strokeOpacity:1});
+    map.geoObjects.add(line);
+    let ph=0;
+    lineAnim=setInterval(function(){
+      ph+=0.18; const p=(Math.sin(ph)+1)/2;
+      try{ lineGlow.options.set('strokeWidth',10+p*10); lineGlow.options.set('strokeOpacity',0.16+p*0.24); line.options.set('strokeWidth',3+p*2.5); }catch(e){ clearInterval(lineAnim); }
+    },60);
+    const az=bearing(pts[0],pts[1]);
+    document.getElementById('az').innerHTML=az.toFixed(1)+'°<small> '+cardinal(az)+'</small>';
+    document.getElementById('azr').innerHTML=bearing(pts[1],pts[0]).toFixed(1)+'°';
+    document.getElementById('dist').textContent=fmtDist(distance(pts[0],pts[1]));
+    document.getElementById('needle').setAttribute('transform','rotate('+az+' 50 50)');
+    try{map.setBounds(line.geometry.getBounds(),{checkZoomRange:true,zoomMargin:60});}catch(e){}
+  }else{
+    document.getElementById('az').textContent='—';
+    document.getElementById('azr').textContent='—';
+    document.getElementById('dist').textContent='—';
+  }
+}
+
+function resetPoints(){
+  pts=[null,null];
+  markers.forEach(m=>m&&map.geoObjects.remove(m)); markers=[null,null];
+  clearLine();
+  draw();
+  document.getElementById('qa').value='';document.getElementById('qb').value='';
+}
+
+function useMyLocation(){
+  if(!navigator.geolocation){toast('Геолокация недоступна');return;}
+  navigator.geolocation.getCurrentPosition(
+    p=>{setPoint(0,p.coords.latitude,p.coords.longitude);toast('Точка A — твоё местоположение');},
+    ()=>toast('Не удалось определить место'));
+}
+
+function findBTS(q){
+  if(!bts||!bts.length) return null;
+  if(!/\d/.test(q)) return null;
+  const norm=s=>String(s).toLowerCase().replace(/\s+/g,'');
+  const dig=s=>String(s).replace(/\D/g,'');
+  const qn=norm(q), qd=dig(q);
+  let hit=bts.find(s=>norm(s.b)===qn);
+  if(!hit&&qd) hit=bts.find(s=>dig(s.b)===qd);
+  if(!hit&&qn.length>=4) hit=bts.find(s=>norm(s.b).indexOf(qn)>=0);
+  if(!hit&&qd&&qd.length>=4) hit=bts.find(s=>dig(s.b).endsWith(qd));
+  return hit||null;
+}
+async function searchPoint(i){
+  const q=document.getElementById(i?'qb':'qa').value.trim();
+  if(!q)return;
+  const m=q.match(/^\s*(-?\d+(?:\.\d+)?)\s*[, ]\s*(-?\d+(?:\.\d+)?)\s*$/);
+  if(m){setPoint(i,parseFloat(m[1]),parseFloat(m[2]));return;}
+  const st=findBTS(q);
+  if(st){setPoint(i,st.la,st.lo);toast('БС '+st.b+(st.ad?' · '+st.ad:''));return;}
+  try{
+    const res=await ymaps.geocode(q,{results:1});
+    const obj=res.geoObjects.get(0);
+    if(obj){const c=obj.geometry.getCoordinates();setPoint(i,c[0],c[1]);}
+    else toast('Ничего не найдено (адрес или № БС)');
+  }catch(e){toast('Ошибка поиска');}
+}
+
+/* ===== Базовые станции МТС ===== */
+let bts=[], om=null, rayColl=null, btsVisible=true, raysTimer=null;
+
+async function loadBTS(){
+  try{
+    try{
+      const xr=await fetch('bts.xlsx?v='+Date.now());
+      if(!xr.ok) throw 0;
+      const buf=await xr.arrayBuffer();
+      const wb=XLSX.read(buf,{type:'array'});
+      const rows=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{defval:''});
+      const pick=(o,subs)=>{for(const k of Object.keys(o)){const lk=k.toLowerCase();for(const s of subs){if(lk.indexOf(s)>=0)return o[k];}}return '';};
+      const num=v=>{if(v===''||v==null)return null;const n=parseFloat(String(v).replace(',','.'));return isFinite(n)?n:null;};
+      const parsed=rows.map(o=>{
+        const la=num(pick(o,['широта','lat']));
+        const lo=num(pick(o,['долгота','lon','lng']));
+        const a=[];
+        for(const k of Object.keys(o)){if(k.toLowerCase().indexOf('азимут')>=0){const n=num(o[k]);if(n!=null)a.push(((n%360)+360)%360);}}
+        return {b:String(pick(o,['nn_','номер','бтс','bts'])||'').trim(), la, lo, a, ad:String(pick(o,['адрес','address'])||'').trim()};
+      }).filter(s=>s.la!=null&&s.lo!=null);
+      const groups=new Map();
+      for(const s of parsed){
+        const key=(s.b||'')!==''?('#'+s.b):(s.la.toFixed(5)+','+s.lo.toFixed(5));
+        let g=groups.get(key);
+        if(!g){g={b:s.b, la:s.la, lo:s.lo, a:[], ad:s.ad}; groups.set(key,g);}
+        for(const az of s.a){if(!g.a.some(x=>Math.abs(x-az)<0.5)) g.a.push(az);}
+        if(!g.ad&&s.ad) g.ad=s.ad;
+      }
+      bts=Array.from(groups.values());
+      if(!bts.length) throw 0;
+    }catch(_){
+      const r=await fetch('bts.json?v=2');
+      bts=await r.json();
+    }
+  }catch(e){ toast('Не удалось загрузить базовые станции'); return; }
+  om=new ymaps.ObjectManager({clusterize:true, gridSize:64, clusterDisableClickZoom:false});
+  om.objects.options.set({preset:'islands#redCircleDotIconWithCaption', iconCaptionMaxWidth:'90'});
+  om.clusters.options.set({preset:'islands#redClusterIcons'});
+  const feats=bts.map((s,i)=>({
+    type:'Feature', id:i,
+    geometry:{type:'Point', coordinates:[s.la, s.lo]},
+    properties:{
+      iconCaption: s.b,
+      balloonContentHeader:'БС '+s.b,
+      balloonContentBody:(s.ad?s.ad+'<br>':'')+'Азимуты антенн: '+(s.a&&s.a.length?s.a.join('°, ')+'°':'—')+'<br><small>'+s.la.toFixed(5)+', '+s.lo.toFixed(5)+'</small>',
+      hintContent:'БС '+s.b+(s.a&&s.a.length?' · '+s.a.join('/')+'°':'')
+    }
+  }));
+  om.add({type:'FeatureCollection', features:feats});
+  map.geoObjects.add(om);
+  rayColl=new ymaps.GeoObjectCollection(null,{strokeColor:'#ff5252',strokeWidth:3,strokeOpacity:0.92});
+  map.geoObjects.add(rayColl);
+  map.events.add('boundschange', queueRays);
+  drawRays();
+  toast('Загружено базовых станций: '+bts.length);
+}
+
+function queueRays(){ clearTimeout(raysTimer); raysTimer=setTimeout(drawRays,180); }
+
+function drawRays(){
+  if(!rayColl) return;
+  rayColl.removeAll();
+  if(!btsVisible) return;
+  const z=map.getZoom();
+  if(z<12) return;
+  const b=map.getBounds();
+  const latMin=Math.min(b[0][0],b[1][0])-0.01, latMax=Math.max(b[0][0],b[1][0])+0.01;
+  const lonMin=Math.min(b[0][1],b[1][1])-0.02, lonMax=Math.max(b[0][1],b[1][1])+0.02;
+  const len = z>=15?180 : z>=14?280 : z>=13?420 : 650;
+  let cnt=0;
+  for(const s of bts){
+    if(s.la<latMin||s.la>latMax||s.lo<lonMin||s.lo>lonMax) continue;
+    for(const az of (s.a||[])){
+      const e=dest(s.la,s.lo,az,len);
+      rayColl.add(new ymaps.Polyline([[s.la,s.lo],e],{},{strokeColor:'#ff5252',strokeWidth:3,strokeOpacity:0.92}));
+      if(++cnt>4000) return;
+    }
+  }
+}
+
+function toggleBTS(){
+  btsVisible=!btsVisible;
+  const btn=document.getElementById('btsBtn');
+  if(om){ if(btsVisible){map.geoObjects.add(om);} else {map.geoObjects.remove(om);} }
+  btn.classList.toggle('on', btsVisible);
+  drawRays();
+}
+
+ymaps.ready(function(){
+  map=new ymaps.Map('map',{center:[53.243,34.363],zoom:12,controls:['zoomControl','geolocationControl']},{suppressMapOpenBlock:true});
+  map.events.add('click',e=>{
+    const c=e.get('coords');
+    const i=(!pts[0])?0:(!pts[1]?1:0);
+    setPoint(i,c[0],c[1]);
+  });
+  ['qa','qb'].forEach((id,i)=>document.getElementById(id).addEventListener('keydown',e=>{if(e.key==='Enter')searchPoint(i);}));
+  loadBTS();
+});
+</script>
+</body>
+</html>
