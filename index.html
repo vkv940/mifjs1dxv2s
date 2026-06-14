@@ -3,13 +3,13 @@
 <head>
 <meta name="robots" content="noindex,nofollow,noarchive">
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <title>Азимут и расстояние · Яндекс.Карты</title>
 <style>
   :root{--bg:#0f1115;--panel:#171a21;--line:#262b36;--txt:#e7ebf3;--mut:#9aa3b2;--acc:#ffcc00;--acc2:#4f9cff;--bts:#ff5252;}
   *{box-sizing:border-box}
   html,body{margin:0;height:100%;font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif;background:var(--bg);color:var(--txt)}
-  #app{display:flex;flex-direction:column;height:100%}
+  #app{display:flex;flex-direction:column;height:100vh;height:100dvh}
   header{padding:10px 14px;background:var(--panel);border-bottom:1px solid var(--line);display:flex;align-items:center;gap:10px;flex-wrap:wrap}
   header h1{font-size:15px;margin:0;font-weight:600;letter-spacing:.2px}
   header .sub{font-size:11px;color:var(--mut)}
@@ -24,12 +24,12 @@
   .field input{flex:1;background:transparent;border:0;color:var(--txt);font-size:13px;outline:none}
   .field button{background:#222835;border:1px solid var(--line);color:var(--txt);border-radius:7px;padding:4px 8px;font-size:12px;cursor:pointer}
   .field button:hover{border-color:var(--acc2)}
-  #results{padding:10px 14px;background:var(--panel);border-top:1px solid var(--line);display:flex;gap:18px;flex-wrap:wrap;align-items:center}
+  #results{flex:none;padding:10px 14px;padding-bottom:calc(10px + env(safe-area-inset-bottom));background:var(--panel);border-top:1px solid var(--line);display:flex;gap:14px 18px;flex-wrap:wrap;align-items:center}
   .metric{display:flex;flex-direction:column}
   .metric .k{font-size:11px;color:var(--mut);text-transform:uppercase;letter-spacing:.5px}
   .metric .v{font-size:20px;font-weight:700}
   .metric .v small{font-size:12px;color:var(--mut);font-weight:500}
-  .actions{margin-left:auto;display:flex;gap:8px}
+  .actions{margin-left:auto;display:flex;gap:8px;flex-wrap:wrap}
   .actions button{background:#222835;border:1px solid var(--line);color:var(--txt);border-radius:8px;padding:7px 12px;font-size:13px;cursor:pointer}
   .actions button:hover{border-color:var(--acc)}
   .hint{font-size:12px;color:var(--mut);padding:6px 14px;background:#11141a;border-bottom:1px solid var(--line)}
