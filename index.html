@@ -828,6 +828,9 @@ parse_Primary(n.content)}catch(l){}a="/EncryptionInfo";n=Qe.find(e,a);if(!n||!n.
   var colors=['#ffcc00','#4f9cff'];
   var ANT_COLORS=['#ff5252','#4f9cff','#ffcc00','#22c55e','#a855f7','#fb923c','#06b6d4','#ec4899','#84cc16','#f43f5e'];
   function antColor(i){return ANT_COLORS[i%ANT_COLORS.length];}
+  var BAND_COLORS={'GSM':'#22c55e','DCS':'#16a34a','NI-1800-FDD':'#84cc16','UMTS':'#fb923c','UMTS2':'#f97316','UMTS3':'#ea580c','LTE-900-FDD':'#a855f7','LTE-1800-FDD':'#4f9cff','LTE-1800-FDD_2':'#3b82f6','LTE-2100-FDD':'#06b6d4','LTE-2600-FDD':'#ec4899','LTE-2600-TDD':'#f43f5e'};
+  var BAND_FALLBACK=['#ff5252','#4f9cff','#ffcc00','#22c55e','#a855f7','#fb923c','#06b6d4','#ec4899','#84cc16','#f43f5e','#14b8a6','#eab308'];
+  function bandColor(b){if(BAND_COLORS[b])return BAND_COLORS[b];var h=0;for(var i=0;i<b.length;i++)h=(h*31+b.charCodeAt(i))>>>0;return BAND_FALLBACK[h%BAND_FALLBACK.length];}
   var map,layerBTS,layerSel,layerLabels,ptMarkers=[null,null],pts=[null,null],lineMain=null,lineGlow=null,lineAnim=null;
   var bts=[],btsVisible=true,selectedStation=null;
 
@@ -973,15 +976,37 @@ parse_Primary(n.content)}catch(l){}a="/EncryptionInfo";n=Qe.find(e,a);if(!n||!n.
   function popupHtml(s){
     var h='<b>БС '+esc(s.b)+'</b>'+(s.ad?'<br>'+esc(s.ad):'');
     var secs=s.sectors||[];
-    if(secs.length){
-      h+='<div style="margin-top:6px;font-weight:600">Антенны ('+secs.length+'):</div>';
-      h+='<div style="display:flex;flex-direction:column;gap:6px;margin-top:4px">';
-      for(var i=0;i<secs.length;i++){
-        var sc=secs[i],col=antColor(i);
-        h+='<div style="border-left:3px solid '+col+';padding-left:7px">';
-        h+='<div style="display:flex;align-items:center;gap:6px"><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:'+col+';flex:none"></span><b>'+sc.az+'°</b>&nbsp;<span style="color:#9aa3b2">'+cardinal(sc.az)+'</span>'+(sc.h!=null?' · h '+sc.h+' м':'')+'</div>';
-        if(sc.bands&&sc.bands.length)h+='<div style="color:#cfd6e2;margin-top:2px">Диапазоны: '+esc(sc.bands.join(', '))+'</div>';
-        if(sc.models&&sc.models.length)h+='<div style="color:#9aa3b2">Антенна: '+esc(sc.models.join(', '))+'</div>';
+    // группировка: высота -> модель -> {диапазоны, азимуты}
+    var H={};
+    for(var i=0;i<secs.length;i++){
+      var sc=secs[i];var hk=(sc.h==null?'—':String(sc.h));
+      var hm=H[hk];if(!hm){hm={};H[hk]=hm;}
+      var models=(sc.models&&sc.models.length)?sc.models:['—'];
+      for(var m=0;m<models.length;m++){
+        var mod=models[m];var en=hm[mod];if(!en){en={bands:{},az:{}};hm[mod]=en;}
+        var bb=sc.bands||[];for(var x=0;x<bb.length;x++)en.bands[bb[x]]=1;
+        en.az[sc.az]=1;
+      }
+    }
+    var hkeys=Object.keys(H).sort(function(a,b){var na=parseFloat(a),nb=parseFloat(b);if(isNaN(na))return 1;if(isNaN(nb))return -1;return na-nb;});
+    if(hkeys.length){
+      h+='<div style="display:flex;flex-direction:column;gap:9px;margin-top:6px">';
+      for(var k=0;k<hkeys.length;k++){
+        var hk=hkeys[k],hm=H[hk];
+        h+='<div><div style="font-weight:600;border-bottom:1px solid #2a313a;padding-bottom:2px">Высота '+(hk==='—'?'—':esc(hk)+' м')+'</div>';
+        var mkeys=Object.keys(hm).sort();
+        for(var mi=0;mi<mkeys.length;mi++){
+          var mod=mkeys[mi],en=hm[mod];
+          var bands=Object.keys(en.bands).sort();
+          var azs=Object.keys(en.az).map(Number).sort(function(a,b){return a-b;});
+          h+='<div style="margin:4px 0 0 6px">';
+          h+='<div style="color:#e7ebf3;font-weight:500">'+(mod==='—'?'<span style="color:#9aa3b2;font-weight:400">Модель не указана</span>':esc(mod))+'</div>';
+          if(bands.length){h+='<div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:3px">';
+            for(var bi=0;bi<bands.length;bi++){h+='<span style="background:'+bandColor(bands[bi])+';color:#0a0d12;font-size:11px;font-weight:600;padding:1px 6px;border-radius:4px">'+esc(bands[bi])+'</span>';}
+            h+='</div>';}
+          h+='<div style="color:#9aa3b2;margin-top:3px">Азимуты: <span style="color:#e7ebf3">'+azs.join(', ')+'</span></div>';
+          h+='</div>';
+        }
         h+='</div>';
       }
       h+='</div>';
