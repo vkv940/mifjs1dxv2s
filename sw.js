@@ -2,12 +2,12 @@
    Стратегия:
    - оболочка приложения (HTML/иконки/манифест): stale-while-revalidate
      -> мгновенно из кеша офлайн, в фоне обновляется при наличии сети;
-   - данные базовых станций (bts.json / bts.xlsx): stale-while-revalidate
+   - зашифрованные данные базовых станций (data.enc.json): stale-while-revalidate
      с игнорированием query (?v=...), чтобы кеш срабатывал офлайн;
-   - сторонние ресурсы (API Яндекс.Карт, тайлы, sheetjs): cache-first
+   - сторонние ресурсы (тайлы OpenStreetMap): cache-first
      с дозаписью в рантайм-кеш -> уже просмотренные тайлы доступны офлайн.
 */
-const VERSION = 'v6';
+const VERSION = 'v7';
 const APP_CACHE = 'azimut-app-' + VERSION;
 const DATA_CACHE = 'azimut-data-' + VERSION;
 const RUNTIME_CACHE = 'azimut-runtime-' + VERSION;
@@ -21,7 +21,7 @@ const APP_SHELL = [
   './assets/icon-192.png',
   './assets/icon-512.png',
 ];
-const DATA_FILES = ['./bts.xlsx'];
+const DATA_FILES = ['./data.enc.json'];
 
 self.addEventListener('install', (event) => {
   event.waitUntil((async () => {
@@ -62,7 +62,7 @@ self.addEventListener('fetch', (event) => {
   const sameOrigin = url.origin === self.location.origin;
 
   if (sameOrigin) {
-    const isData = /bts\.(json|xlsx)$/.test(url.pathname);
+    const isData = /data\.enc\.json$/.test(url.pathname);
     event.respondWith(staleWhileRevalidate(req, isData ? DATA_CACHE : APP_CACHE, isData));
     return;
   }
