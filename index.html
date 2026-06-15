@@ -5,6 +5,14 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <title>Азимут и расстояние · Яндекс.Карты</title>
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#0f1115">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Азимут">
+<link rel="apple-touch-icon" href="assets/icon-192.png">
+<link rel="icon" type="image/png" href="assets/icon-192.png">
 <style>
   :root{--bg:#0f1115;--panel:#171a21;--line:#262b36;--txt:#e7ebf3;--mut:#9aa3b2;--acc:#ffcc00;--acc2:#4f9cff;--bts:#ff5252;}
   *{box-sizing:border-box}
@@ -100,6 +108,20 @@
   </div>
 </div>
 <div class="toast" id="toast"></div>
+
+<script>
+  // Регистрация Service Worker для офлайн-режима
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', function () {
+      navigator.serviceWorker.register('sw.js').catch(function () {});
+    });
+  }
+  window.addEventListener('online',  function(){ if (typeof toast==='function') toast('Сеть появилась — данные обновятся'); });
+  window.addEventListener('offline', function(){ if (typeof toast==='function') toast('Офлайн-режим: показаны сохранённые данные'); });
+  window.addEventListener('load', function(){
+    setTimeout(function(){ if (typeof ymaps === 'undefined' && typeof toast==='function') toast('Карта недоступна офлайн (не была загружена при сети)'); }, 9000);
+  });
+</script>
 
 <script src="https://api-maps.yandex.ru/2.1/?apikey=1927f414-4acb-41e6-9e17-ba4a072b3068&lang=ru_RU"></script>
 <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
@@ -228,9 +250,10 @@ async function searchPoint(i){
 let bts=[], om=null, rayColl=null, btsVisible=true, raysTimer=null;
 
 async function loadBTS(){
+  let offlineData=false;
   try{
     try{
-      const xr=await fetch('bts.xlsx?v='+Date.now());
+      const xr=await fetch('bts.xlsx');
       if(!xr.ok) throw 0;
       const buf=await xr.arrayBuffer();
       const wb=XLSX.read(buf,{type:'array'});
@@ -255,10 +278,17 @@ async function loadBTS(){
       bts=Array.from(groups.values());
       if(!bts.length) throw 0;
     }catch(_){
-      const r=await fetch('bts.json?v=2');
+      const r=await fetch('bts.json');
+      if(!r.ok) throw 0;
       bts=await r.json();
     }
-  }catch(e){ toast('Не удалось загрузить базовые станции'); return; }
+    try{ if(bts&&bts.length) localStorage.setItem('az_bts', JSON.stringify(bts)); }catch(_){}
+  }catch(e){
+    // нет сети и нет в кеше — пробуем ранее сохранённые данные
+    try{ const s=localStorage.getItem('az_bts'); if(s) bts=JSON.parse(s)||[]; }catch(_){}
+    if(!bts||!bts.length){ toast('Не удалось загрузить базовые станции'); return; }
+    offlineData=true;
+  }
   om=new ymaps.ObjectManager({clusterize:true, gridSize:64, clusterDisableClickZoom:false});
   om.objects.options.set({preset:'islands#redCircleDotIconWithCaption', iconCaptionMaxWidth:'90'});
   om.clusters.options.set({preset:'islands#redClusterIcons'});
@@ -278,7 +308,7 @@ async function loadBTS(){
   map.geoObjects.add(rayColl);
   map.events.add('boundschange', queueRays);
   drawRays();
-  toast('Загружено базовых станций: '+bts.length);
+  toast((offlineData?'Офлайн · ':'')+'Загружено базовых станций: '+bts.length);
 }
 
 function queueRays(){ clearTimeout(raysTimer); raysTimer=setTimeout(drawRays,180); }
