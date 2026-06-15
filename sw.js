@@ -7,7 +7,7 @@
    - сторонние ресурсы (API Яндекс.Карт, тайлы, sheetjs): cache-first
      с дозаписью в рантайм-кеш -> уже просмотренные тайлы доступны офлайн.
 */
-const VERSION = 'v5';
+const VERSION = 'v6';
 const APP_CACHE = 'azimut-app-' + VERSION;
 const DATA_CACHE = 'azimut-data-' + VERSION;
 const RUNTIME_CACHE = 'azimut-runtime-' + VERSION;

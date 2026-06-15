@@ -751,7 +751,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
     <span class="grow"></span>
     <button id="btsBtn" class="tgl on" onclick="toggleBTS()">📡 Вышки МТС</button>
   </header>
-  <div class="hint">Точка A — клик по карте (жёлтая), затем точка B (синяя). Перетаскивай маркеры. Красные точки — базовые станции МТС (номер подписан рядом). Нажми на станцию — её антенны: азимут, диапазоны и модель (каждая своим цветом).</div>
+  <div class="hint">Точка A — клик по карте (жёлтая), затем точка B (синяя). Перетаскивай маркеры. Красные точки — базовые станции МТС (номер подписан рядом). Нажми на станцию — её антенны по высотам: модель, диапазоны и азимуты.</div>
   <div class="bar">
     <div class="field"><span class="dot a"></span><input id="qa" placeholder="Адрес, координаты или № БС (напр. 32-00085)"><button onclick="searchPoint(0)">Найти</button></div>
     <div class="field"><span class="dot b"></span><input id="qb" placeholder="Адрес, координаты или № БС"><button onclick="searchPoint(1)">Найти</button></div>
@@ -831,6 +831,7 @@ parse_Primary(n.content)}catch(l){}a="/EncryptionInfo";n=Qe.find(e,a);if(!n||!n.
   var BAND_COLORS={'GSM':'#22c55e','DCS':'#16a34a','NI-1800-FDD':'#84cc16','UMTS':'#fb923c','UMTS2':'#f97316','UMTS3':'#ea580c','LTE-900-FDD':'#a855f7','LTE-1800-FDD':'#4f9cff','LTE-1800-FDD_2':'#3b82f6','LTE-2100-FDD':'#06b6d4','LTE-2600-FDD':'#ec4899','LTE-2600-TDD':'#f43f5e'};
   var BAND_FALLBACK=['#ff5252','#4f9cff','#ffcc00','#22c55e','#a855f7','#fb923c','#06b6d4','#ec4899','#84cc16','#f43f5e','#14b8a6','#eab308'];
   function bandColor(b){if(BAND_COLORS[b])return BAND_COLORS[b];var h=0;for(var i=0;i<b.length;i++)h=(h*31+b.charCodeAt(i))>>>0;return BAND_FALLBACK[h%BAND_FALLBACK.length];}
+
   var map,layerBTS,layerSel,layerLabels,ptMarkers=[null,null],pts=[null,null],lineMain=null,lineGlow=null,lineAnim=null;
   var bts=[],btsVisible=true,selectedStation=null;
 
@@ -914,7 +915,7 @@ parse_Primary(n.content)}catch(l){}a="/EncryptionInfo";n=Qe.find(e,a);if(!n||!n.
     }).catch(function(){toast('Ошибка поиска адреса');});
   }
 
-  /* ===== парсинг исходной таблицы xlsx ===== */
+  /* ===== парсинг исходной таблицы xlsx (только строки Регион=dubl — они самодостаточны) ===== */
   function num(v){if(v===null||v===undefined||v==='')return null;var n=parseFloat(String(v).replace(',','.'));return isFinite(n)?n:null;}
   function parseWorkbook(ab){
     var wb=XLSX.read(ab,{type:'array',dense:true,cellNF:false,cellText:false,cellDates:false});
@@ -923,33 +924,40 @@ parse_Primary(n.content)}catch(l){}a="/EncryptionInfo";n=Qe.find(e,a);if(!n||!n.
     var mp={};
     for(var i=1;i<rows.length;i++){
       var r=rows[i];if(!r)continue;
+      var reg=r[1]?String(r[1]).trim().toLowerCase():'';
+      if(reg!=='dubl')continue;
       var bn=r[5];if(bn===null||bn===undefined||String(bn).trim()==='')continue;bn=String(bn).trim();
       var la=num(r[13]),lo=num(r[17]);if(la===null||lo===null)continue;
       var band=r[2]?String(r[2]).trim():'';
       var addr=r[9]?String(r[9]).trim():'';
-      var st=mp[bn];if(!st){st={b:bn,la:la,lo:lo,ad:addr,sec:{}};mp[bn]=st;}
+      var st=mp[bn];if(!st){st={b:bn,la:la,lo:lo,ad:addr,gm:{}};mp[bn]=st;}
       if(addr&&addr.length>st.ad.length)st.ad=addr;
       for(var k=0;k<3;k++){
         var ant=r[30+k];if(ant===null||ant===undefined||String(ant).trim()==='')continue;
         var az=num(r[18+k]);if(az===null)continue;
         var h=num(r[21+k]);
-        var azk=Math.round(((az%360)+360)%360);
-        var sec=st.sec[azk];if(!sec){sec={az:azk,bands:{},models:{},h:h};st.sec[azk]=sec;}
-        if(band)sec.bands[band]=1;
-        sec.models[String(ant).trim()]=1;
-        if(sec.h==null&&h!=null)sec.h=h;
+        var model=String(ant).trim();
+        var key=(h==null?'-':h)+'|'+model;
+        var e=st.gm[key];if(!e){e={h:h,model:model,bands:{},az:{}};st.gm[key]=e;}
+        if(band)e.bands[band]=1;
+        e.az[Math.round(((az%360)+360)%360)]=1;
       }
     }
     var out=[];
-    for(var key in mp){
-      var s=mp[key];var azs=Object.keys(s.sec).map(Number).sort(function(a,b){return a-b;});var secs=[];
-      for(var j=0;j<azs.length;j++){var sc=s.sec[azs[j]];secs.push({az:sc.az,bands:Object.keys(sc.bands).sort(),models:Object.keys(sc.models).sort(),h:sc.h});}
-      out.push({b:s.b,la:Math.round(s.la*1e6)/1e6,lo:Math.round(s.lo*1e6)/1e6,ad:s.ad,sectors:secs,a:secs.map(function(x){return x.az;})});
+    for(var kk in mp){
+      var s=mp[kk];var groups=[],azall={};
+      for(var gk in s.gm){
+        var e=s.gm[gk];
+        var azs=Object.keys(e.az).map(Number).sort(function(a,b){return a-b;});
+        for(var z=0;z<azs.length;z++)azall[azs[z]]=1;
+        groups.push({h:e.h,model:e.model,bands:Object.keys(e.bands).sort(),az:azs});
+      }
+      out.push({b:s.b,la:Math.round(s.la*1e6)/1e6,lo:Math.round(s.lo*1e6)/1e6,ad:s.ad,groups:groups,a:Object.keys(azall).map(Number).sort(function(a,b){return a-b;})});
     }
     return out;
   }
   function loadBTS(){
-    var KEY='az_bts_v2';
+    var KEY='az_bts_v3';
     fetch('bts.xlsx').then(function(r){if(!r.ok)throw 0;return r.arrayBuffer();}).then(function(ab){
       var fp=ab.byteLength,cached=null;
       try{cached=JSON.parse(localStorage.getItem(KEY)||'null');}catch(_){}
@@ -975,36 +983,24 @@ parse_Primary(n.content)}catch(l){}a="/EncryptionInfo";n=Qe.find(e,a);if(!n||!n.
 
   function popupHtml(s){
     var h='<b>БС '+esc(s.b)+'</b>'+(s.ad?'<br>'+esc(s.ad):'');
-    var secs=s.sectors||[];
-    // группировка: высота -> модель -> {диапазоны, азимуты}
+    var groups=s.groups||[];
     var H={};
-    for(var i=0;i<secs.length;i++){
-      var sc=secs[i];var hk=(sc.h==null?'—':String(sc.h));
-      var hm=H[hk];if(!hm){hm={};H[hk]=hm;}
-      var models=(sc.models&&sc.models.length)?sc.models:['—'];
-      for(var m=0;m<models.length;m++){
-        var mod=models[m];var en=hm[mod];if(!en){en={bands:{},az:{}};hm[mod]=en;}
-        var bb=sc.bands||[];for(var x=0;x<bb.length;x++)en.bands[bb[x]]=1;
-        en.az[sc.az]=1;
-      }
-    }
+    for(var i=0;i<groups.length;i++){var g=groups[i];var hk=(g.h==null?'—':String(g.h));(H[hk]||(H[hk]=[])).push(g);}
     var hkeys=Object.keys(H).sort(function(a,b){var na=parseFloat(a),nb=parseFloat(b);if(isNaN(na))return 1;if(isNaN(nb))return -1;return na-nb;});
     if(hkeys.length){
       h+='<div style="display:flex;flex-direction:column;gap:9px;margin-top:6px">';
       for(var k=0;k<hkeys.length;k++){
-        var hk=hkeys[k],hm=H[hk];
+        var hk=hkeys[k],arr=H[hk];
+        arr.sort(function(a,b){return (a.model||'')<(b.model||'')?-1:1;});
         h+='<div><div style="font-weight:600;border-bottom:1px solid #2a313a;padding-bottom:2px">Высота '+(hk==='—'?'—':esc(hk)+' м')+'</div>';
-        var mkeys=Object.keys(hm).sort();
-        for(var mi=0;mi<mkeys.length;mi++){
-          var mod=mkeys[mi],en=hm[mod];
-          var bands=Object.keys(en.bands).sort();
-          var azs=Object.keys(en.az).map(Number).sort(function(a,b){return a-b;});
+        for(var mi=0;mi<arr.length;mi++){
+          var g=arr[mi];
           h+='<div style="margin:4px 0 0 6px">';
-          h+='<div style="color:#e7ebf3;font-weight:500">'+(mod==='—'?'<span style="color:#9aa3b2;font-weight:400">Модель не указана</span>':esc(mod))+'</div>';
-          if(bands.length){h+='<div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:3px">';
-            for(var bi=0;bi<bands.length;bi++){h+='<span style="background:'+bandColor(bands[bi])+';color:#0a0d12;font-size:11px;font-weight:600;padding:1px 6px;border-radius:4px">'+esc(bands[bi])+'</span>';}
+          h+='<div style="color:#e7ebf3;font-weight:500">'+(g.model?esc(g.model):'<span style="color:#9aa3b2;font-weight:400">Модель не указана</span>')+'</div>';
+          if(g.bands&&g.bands.length){h+='<div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:3px">';
+            for(var bi=0;bi<g.bands.length;bi++){h+='<span style="background:'+bandColor(g.bands[bi])+';color:#0a0d12;font-size:11px;font-weight:600;padding:1px 6px;border-radius:4px">'+esc(g.bands[bi])+'</span>';}
             h+='</div>';}
-          h+='<div style="color:#9aa3b2;margin-top:3px">Азимуты: <span style="color:#e7ebf3">'+azs.join(', ')+'</span></div>';
+          h+='<div style="color:#9aa3b2;margin-top:3px">Азимуты: <span style="color:#e7ebf3">'+(g.az||[]).join(', ')+'</span></div>';
           h+='</div>';
         }
         h+='</div>';
@@ -1047,9 +1043,9 @@ parse_Primary(n.content)}catch(l){}a="/EncryptionInfo";n=Qe.find(e,a);if(!n||!n.
     if(!layerSel)return;
     layerSel.clearLayers();
     if(!btsVisible||!selectedStation)return;
-    var s=selectedStation,secs=s.sectors||[],r=rayLen(),half=27;
-    for(var j=0;j<secs.length;j++){
-      var az=secs[j].az,col=antColor(j);
+    var s=selectedStation,azs=s.a||[],r=rayLen(),half=27;
+    for(var j=0;j<azs.length;j++){
+      var az=azs[j],col=antColor(j);
       var poly=[[s.la,s.lo]].concat(arcPts(s.la,s.lo,az,half,r,18));
       layerSel.addLayer(L.polygon(poly,{color:col,weight:1,opacity:0.45,fillColor:col,fillOpacity:0.16,interactive:false}));
       var tip=dest(s.la,s.lo,az,r);
