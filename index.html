@@ -713,8 +713,8 @@ svg.leaflet-image-layer.leaflet-interactive path {
   .leaflet-container{background:#0b0d11;font:inherit}
   .leaflet-bar a,.leaflet-bar a:hover{background:#171a21;color:#e7ebf3;border-bottom-color:#262b36}
   .leaflet-bar a.leaflet-disabled{background:#11141a;color:#444}
-  .leaflet-control-attribution{background:rgba(15,17,21,.78)!important;color:#9aa3b2!important}
-  .leaflet-control-attribution a{color:#6ea8ff!important}
+  .leaflet-control-attribution{background:rgba(15,17,21,.55)!important;color:#6b7480!important;font-size:9px!important;padding:0 4px!important}
+  .leaflet-control-attribution a{color:#7f96b8!important}
   .leaflet-control-scale-line{background:rgba(15,17,21,.7);color:#cfd6e2;border-color:#3a4350}
   .leaflet-popup-content-wrapper,.leaflet-popup-tip{background:#171a21;color:#e7ebf3}
   .leaflet-popup-content{font-size:13px;line-height:1.45;margin:10px 12px}
@@ -1065,6 +1065,7 @@ parse_Primary(n.content)}catch(l){}a="/EncryptionInfo";n=Qe.find(e,a);if(!n||!n.
 
   function initMap(){
     map=L.map('map',{preferCanvas:true,zoomControl:true,attributionControl:true,worldCopyJump:true}).setView([53.243,34.363],12);
+    map.attributionControl.setPrefix(false);
     L.control.scale({imperial:false}).addTo(map);
     L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'© OpenStreetMap'}).addTo(map);
     layerSel=L.layerGroup().addTo(map);
