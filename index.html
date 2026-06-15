@@ -753,7 +753,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
     <span class="grow"></span>
     <button id="btsBtn" class="tgl on" onclick="toggleBTS()">📡 Вышки МТС</button>
   </header>
-  <div class="hint">Точка A — клик по карте (жёлтая), затем точка B (синяя). Перетаскивай маркеры. Красные точки — базовые станции МТС; приблизь карту, чтобы увидеть лучи азимутов антенн. Нажми на станцию — номер и азимуты.</div>
+  <div class="hint">Точка A — клик по карте (жёлтая), затем точка B (синяя). Перетаскивай маркеры. Красные точки — базовые станции МТС. Нажми на станцию — увидишь её антенны с азимутами (каждая своим цветом).</div>
   <div class="bar">
     <div class="field"><span class="dot a"></span><input id="qa" placeholder="Адрес, координаты или № БС (напр. 32-00085)"><button onclick="searchPoint(0)">Найти</button></div>
     <div class="field"><span class="dot b"></span><input id="qb" placeholder="Адрес, координаты или № БС"><button onclick="searchPoint(1)">Найти</button></div>
@@ -817,8 +817,10 @@ svg.leaflet-image-layer.leaflet-interactive path {
   var tt;function toast(t){var e=$('toast');if(!e)return;e.textContent=t;e.classList.add('show');clearTimeout(tt);tt=setTimeout(function(){e.classList.remove('show');},2400);}
 
   var colors=['#ffcc00','#4f9cff'];
-  var map,layerBTS,layerRays,ptMarkers=[null,null],pts=[null,null],lineMain=null,lineGlow=null,lineAnim=null;
-  var bts=[],btsVisible=true,raysTimer=null;
+  var map,layerBTS,ptMarkers=[null,null],pts=[null,null],lineMain=null,lineGlow=null,lineAnim=null;
+  var bts=[],btsVisible=true,layerSel=null,selectedStation=null;
+  var ANT_COLORS=['#ff5252','#4f9cff','#ffcc00','#22c55e','#a855f7','#fb923c','#06b6d4','#ec4899','#84cc16','#f43f5e'];
+  function antColor(i){return ANT_COLORS[i%ANT_COLORS.length];}
 
   function pin(i,lat,lon){
     var icon=L.divIcon({className:'pt-pin',html:'<span style="display:block;width:18px;height:18px;border-radius:50%;background:'+colors[i]+';border:3px solid #0f1115;box-shadow:0 0 0 1px rgba(0,0,0,.45)"></span>',iconSize:[18,18],iconAnchor:[9,9]});
@@ -861,6 +863,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
     pts=[null,null];
     ptMarkers.forEach(function(m){if(m)map.removeLayer(m);});ptMarkers=[null,null];
     clearLine();draw();
+    selectedStation=null;if(layerSel)layerSel.clearLayers();
     $('qa').value='';$('qb').value='';
   }
   function useMyLocation(){
@@ -898,39 +901,61 @@ svg.leaflet-image-layer.leaflet-interactive path {
       else toast('Ничего не найдено (адрес, координаты или № БС)');
     }).catch(function(){toast('Ошибка поиска адреса');});
   }
+  function popupHtml(s){
+    var h='<b>БС '+esc(s.b)+'</b>'+(s.ad?'<br>'+esc(s.ad):'');
+    if(s.a&&s.a.length){
+      h+='<div style="margin-top:6px;font-weight:600">Антенны ('+s.a.length+'):</div>';
+      h+='<div style="display:flex;flex-direction:column;gap:3px;margin-top:3px">';
+      for(var i=0;i<s.a.length;i++){
+        var az=s.a[i];
+        h+='<div style="display:flex;align-items:center;gap:7px"><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:'+antColor(i)+';flex:none"></span>Антенна '+(i+1)+': <b>'+az+'°</b>&nbsp;<span style="color:#9aa3b2">'+cardinal(az)+'</span></div>';
+      }
+      h+='</div>';
+    } else { h+='<br><span style="color:#9aa3b2">Азимуты не указаны</span>'; }
+    h+='<div style="margin-top:6px"><small>'+s.la.toFixed(5)+', '+s.lo.toFixed(5)+'</small></div>';
+    return h;
+  }
   function addBTSLayer(){
     layerBTS.clearLayers();
     for(var i=0;i<bts.length;i++){
-      var s=bts[i];
-      var mk=L.circleMarker([s.la,s.lo],{radius:5,color:'#0f1115',weight:1.5,fillColor:'#ff5252',fillOpacity:0.95});
-      mk.bindTooltip('БС '+s.b,{direction:'top'});
-      mk.bindPopup('<b>БС '+esc(s.b)+'</b>'+(s.ad?'<br>'+esc(s.ad):'')+'<br>Азимуты антенн: '+(s.a&&s.a.length?s.a.join('°, ')+'°':'—')+'<br><small>'+s.la.toFixed(5)+', '+s.lo.toFixed(5)+'</small>');
-      layerBTS.addLayer(mk);
+      (function(s){
+        var mk=L.circleMarker([s.la,s.lo],{radius:5,color:'#0f1115',weight:1.5,fillColor:'#ff5252',fillOpacity:0.95});
+        mk.bindTooltip('БС '+s.b,{direction:'top'});
+        mk.bindPopup(popupHtml(s),{maxWidth:280});
+        mk.on('click',function(){selectBTS(s);});
+        layerBTS.addLayer(mk);
+      })(bts[i]);
     }
   }
-  function drawRays(){
-    layerRays.clearLayers();
-    if(!btsVisible)return;
-    var z=map.getZoom();if(z<12)return;
-    var b=map.getBounds().pad(0.12);
-    var len=z>=15?180:z>=14?280:z>=13?420:650,cnt=0;
-    for(var i=0;i<bts.length;i++){
-      var s=bts[i];
-      if(!b.contains([s.la,s.lo]))continue;
-      var arr=s.a||[];
-      for(var j=0;j<arr.length;j++){
-        var e=dest(s.la,s.lo,arr[j],len);
-        layerRays.addLayer(L.polyline([[s.la,s.lo],e],{color:'#ff5252',weight:3,opacity:0.9,interactive:false}));
-        if(++cnt>4000)return;
-      }
+  function arcPts(lat,lon,az,half,r,steps){
+    var pts=[];
+    for(var k=0;k<=steps;k++){
+      var a=az-half+(2*half)*(k/steps);
+      pts.push(dest(lat,lon,((a%360)+360)%360,r));
     }
+    return pts;
   }
-  function queueRays(){clearTimeout(raysTimer);raysTimer=setTimeout(drawRays,150);}
+  function rayLen(){var z=map.getZoom();return z>=16?180:z>=15?260:z>=14?380:z>=13?560:z>=12?850:1300;}
+  function drawSelected(){
+    if(!layerSel)return;
+    layerSel.clearLayers();
+    if(!btsVisible||!selectedStation)return;
+    var s=selectedStation,arr=s.a||[],r=rayLen(),half=27;
+    for(var j=0;j<arr.length;j++){
+      var az=arr[j],col=antColor(j);
+      var poly=[[s.la,s.lo]].concat(arcPts(s.la,s.lo,az,half,r,18));
+      layerSel.addLayer(L.polygon(poly,{color:col,weight:1,opacity:0.45,fillColor:col,fillOpacity:0.16,interactive:false}));
+      var tip=dest(s.la,s.lo,az,r);
+      layerSel.addLayer(L.polyline([[s.la,s.lo],tip],{color:col,weight:4,opacity:0.95,lineCap:'round',interactive:false}));
+      layerSel.addLayer(L.circleMarker(tip,{radius:4,color:'#0f1115',weight:1.5,fillColor:col,fillOpacity:1,interactive:false}));
+    }
+    layerSel.addLayer(L.circleMarker([s.la,s.lo],{radius:8,color:'#fff',weight:2,fillColor:'#ff5252',fillOpacity:1,interactive:false}));
+  }
+  function selectBTS(s){selectedStation=s;drawSelected();}
   function toggleBTS(){
     btsVisible=!btsVisible;
-    if(btsVisible){map.addLayer(layerBTS);}else{map.removeLayer(layerBTS);}
+    if(btsVisible){map.addLayer(layerBTS);map.addLayer(layerSel);}else{map.removeLayer(layerBTS);map.removeLayer(layerSel);}
     var btn=$('btsBtn');if(btn)btn.classList.toggle('on',btsVisible);
-    drawRays();
   }
   window.toggleBTS=toggleBTS;window.searchPoint=searchPoint;window.useMyLocation=useMyLocation;window.resetPoints=resetPoints;
 
@@ -946,7 +971,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
     });
   }
   function finish(offline){
-    addBTSLayer();drawRays();
+    addBTSLayer();
     toast((offline?'Офлайн · ':'')+'Загружено базовых станций: '+bts.length);
   }
 
@@ -954,10 +979,10 @@ svg.leaflet-image-layer.leaflet-interactive path {
     map=L.map('map',{preferCanvas:true,zoomControl:true,attributionControl:true,worldCopyJump:true}).setView([53.243,34.363],12);
     L.control.scale({imperial:false}).addTo(map);
     L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'© OpenStreetMap'}).addTo(map);
-    layerRays=L.layerGroup().addTo(map);
+    layerSel=L.layerGroup().addTo(map);
     layerBTS=L.layerGroup().addTo(map);
     map.on('click',function(e){var i=(!pts[0])?0:(!pts[1]?1:0);setPoint(i,e.latlng.lat,e.latlng.lng);});
-    map.on('moveend',queueRays);
+    map.on('zoomend',function(){drawSelected();});
     ['qa','qb'].forEach(function(id,i){$(id).addEventListener('keydown',function(e){if(e.key==='Enter')searchPoint(i);});});
     setTimeout(function(){map.invalidateSize();},200);
     loadBTS();
