@@ -7,7 +7,7 @@
    - сторонние ресурсы (API Яндекс.Карт, тайлы, sheetjs): cache-first
      с дозаписью в рантайм-кеш -> уже просмотренные тайлы доступны офлайн.
 */
-const VERSION = 'v4';
+const VERSION = 'v5';
 const APP_CACHE = 'azimut-app-' + VERSION;
 const DATA_CACHE = 'azimut-data-' + VERSION;
 const RUNTIME_CACHE = 'azimut-runtime-' + VERSION;
@@ -21,7 +21,7 @@ const APP_SHELL = [
   './assets/icon-192.png',
   './assets/icon-512.png',
 ];
-const DATA_FILES = ['./bts.json'];
+const DATA_FILES = ['./bts.xlsx'];
 
 self.addEventListener('install', (event) => {
   event.waitUntil((async () => {
