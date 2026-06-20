@@ -7,7 +7,7 @@
    - сторонние ресурсы (тайлы OpenStreetMap): cache-first
      с дозаписью в рантайм-кеш -> уже просмотренные тайлы доступны офлайн.
 */
-const VERSION = 'v10';
+const VERSION = 'v11';
 const APP_CACHE = 'azimut-app-' + VERSION;
 const DATA_CACHE = 'azimut-data-' + VERSION;
 const RUNTIME_CACHE = 'azimut-runtime-' + VERSION;

@@ -758,10 +758,13 @@ svg.leaflet-image-layer.leaflet-interactive path {
       return deriveKey(pw,b2u(meta.salt),meta.iter||200000).then(function(key){
         return crypto.subtle.decrypt({name:'AES-GCM',iv:b2u(meta.iv)},key,b2u(meta.ct)).then(function(buf){
           window.__AZ_STATIONS__=JSON.parse(new TextDecoder().decode(buf));
-          /* пролёты РРЛ зашифрованы тем же ключом — расшифровываем тем же паролем */
+          /* пролёты РРЛ — отдельный зашифрованный файл, тем же паролем, но со своей солью
+             (чтобы переезд/перешифровка базы БС не ломала РРЛ) */
           return fetch('rrl.enc.json',{cache:'no-cache'}).then(function(r){return r.ok?r.json():null;}).catch(function(){return null;}).then(function(rm){
             if(!rm)return;
-            return crypto.subtle.decrypt({name:'AES-GCM',iv:b2u(rm.iv)},key,b2u(rm.ct)).then(function(rb){
+            return deriveKey(pw,b2u(rm.salt),rm.iter||200000).then(function(rkey){
+              return crypto.subtle.decrypt({name:'AES-GCM',iv:b2u(rm.iv)},rkey,b2u(rm.ct));
+            }).then(function(rb){
               try{window.__AZ_RRL__=JSON.parse(new TextDecoder().decode(rb));}catch(e){}
             }).catch(function(){});
           });
