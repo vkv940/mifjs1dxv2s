@@ -861,7 +861,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
 
   var map,layerBTS,layerSel,layerLabels,ptMarkers=[null,null],pts=[null,null],lineMain=null,lineGlow=null,lineAnim=null;
   var bts=[],btsVisible=true,selectedStation=null;
-  var layerRRL,rrlVisible=false,rrlBuilt=false;
+  var layerRRL,rrlVisible=false,rrlBuilt=false,rrlRenderer=null;
   var RRL_COLORS={'7 GHz':'#f59e0b','13 GHz':'#22c55e','18 GHz':'#4f9cff','38 GHz':'#a855f7','80 GHz':'#ec4899'};
   function rrlColor(b){return RRL_COLORS[b]||'#94a3b8';}
   function rrlNorm(c){var m=String(c).trim().match(/^(\d+)-0*(\d+)$/);return m?m[1]+'-'+m[2]:String(c).trim();}
@@ -1058,17 +1058,21 @@ svg.leaflet-image-layer.leaflet-interactive path {
     if(!bts.length){rrlBuilt=false;return 0;}
     var idx={};for(var i=0;i<bts.length;i++)idx[rrlNorm(bts[i].b)]=bts[i];
     var RRL_DATA=window.__AZ_RRL__||[];
+    if(!rrlRenderer)rrlRenderer=L.canvas({tolerance:12,padding:0.5});
     var drawn=0;
     for(var j=0;j<RRL_DATA.length;j++){
       var sp=RRL_DATA[j],A=idx[rrlNorm(sp.a)],B=idx[rrlNorm(sp.b)];
       if(!A||!B||A===B)continue;
       (function(sp,A,B){
-        var col=rrlColor(sp.band);
-        var pl=L.polyline([[A.la,A.lo],[B.la,B.lo]],{color:col,weight:2.5,opacity:0.82,lineCap:'round'});
-        pl.bindPopup(rrlPopup(sp,A,B),{maxWidth:300});
-        pl.on('mouseover',function(){pl.setStyle({weight:5,opacity:1});});
-        pl.on('mouseout',function(){pl.setStyle({weight:2.5,opacity:0.82});});
-        layerRRL.addLayer(pl);
+        var col=rrlColor(sp.band),ll=[[A.la,A.lo],[B.la,B.lo]];
+        /* видимая тонкая линия (без кликов) */
+        var vis=L.polyline(ll,{color:col,weight:3,opacity:0.85,lineCap:'round',interactive:false,renderer:rrlRenderer});
+        /* широкая невидимая линия-«ловушка» — чтобы легко попадать пальцем */
+        var hit=L.polyline(ll,{color:col,weight:22,opacity:0,lineCap:'round',bubblingMouseEvents:false,renderer:rrlRenderer});
+        hit.bindPopup(rrlPopup(sp,A,B),{maxWidth:320});
+        function hi(){vis.setStyle({weight:6,opacity:1});} function lo(){vis.setStyle({weight:3,opacity:0.85});}
+        hit.on('mouseover',hi); hit.on('mouseout',lo); hit.on('click',hi); hit.on('popupclose',lo);
+        layerRRL.addLayer(vis); layerRRL.addLayer(hit);
       })(sp,A,B);
       drawn++;
     }
