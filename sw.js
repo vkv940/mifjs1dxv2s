@@ -7,7 +7,7 @@
    - сторонние ресурсы (тайлы OpenStreetMap): cache-first
      с дозаписью в рантайм-кеш -> уже просмотренные тайлы доступны офлайн.
 */
-const VERSION = 'v8';
+const VERSION = 'v9';
 const APP_CACHE = 'azimut-app-' + VERSION;
 const DATA_CACHE = 'azimut-data-' + VERSION;
 const RUNTIME_CACHE = 'azimut-runtime-' + VERSION;
@@ -21,7 +21,7 @@ const APP_SHELL = [
   './assets/icon-192.png',
   './assets/icon-512.png',
 ];
-const DATA_FILES = ['./data.enc.json'];
+const DATA_FILES = ['./data.enc.json', './rrl.enc.json'];
 
 self.addEventListener('install', (event) => {
   event.waitUntil((async () => {
@@ -62,7 +62,7 @@ self.addEventListener('fetch', (event) => {
   const sameOrigin = url.origin === self.location.origin;
 
   if (sameOrigin) {
-    const isData = /data\.enc\.json$/.test(url.pathname);
+    const isData = /(?:data|rrl)\.enc\.json$/.test(url.pathname);
     event.respondWith(staleWhileRevalidate(req, isData ? DATA_CACHE : APP_CACHE, isData));
     return;
   }
