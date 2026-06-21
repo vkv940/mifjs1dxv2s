@@ -791,6 +791,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
     <span class="grow"></span>
     <button id="btsBtn" class="tgl on" onclick="toggleBTS()">📡 Вышки МТС</button>
     <button id="rrlBtn" class="tgl" onclick="toggleRRL()">📶 РРЛ</button>
+    <button id="dlBtn" class="tgl" onclick="downloadRegion()" title="Скачать карту региона для офлайна">📥 Офлайн</button>
   </header>
   <div class="bar">
     <div class="field"><span class="dot a"></span><input id="qa" placeholder="Адрес, координаты или № БС (напр. 32-00085)"><button onclick="searchPoint(0)">Найти</button></div>
@@ -957,6 +958,9 @@ svg.leaflet-image-layer.leaflet-interactive path {
   function finish(offline){
     addBTSLayer();refreshLabels();
     toast((offline?'Офлайн · ':'')+'Базовых станций: '+bts.length);
+    try{var b=document.getElementById('dlBtn');if(b&&localStorage.getItem('regionPreloaded'))b.classList.add('on');
+      if(!offline&&!localStorage.getItem('regionPreloaded')&&!localStorage.getItem('regionPrompted')&&navigator.onLine){localStorage.setItem('regionPrompted','1');setTimeout(function(){downloadRegion();},1400);}
+    }catch(e){}
   }
 
   function popupHtml(s){
@@ -1089,6 +1093,60 @@ svg.leaflet-image-layer.leaflet-interactive path {
     } else { map.removeLayer(layerRRL); }
     var btn=$('rrlBtn');if(btn)btn.classList.toggle('on',rrlVisible);
   }
+  /* ===== Офлайн-карта региона: предзагрузка тайлов Брянской области ===== */
+  var REGION={S:51.80,N:54.05,W:31.10,E:35.30,minZ:7,maxZ:12};
+  var dlRunning=false,dlCancel=false;
+  function lon2x(lon,z){return Math.floor((lon+180)/360*Math.pow(2,z));}
+  function lat2y(lat,z){var r=lat*Math.PI/180;return Math.floor((1-Math.log(Math.tan(r)+1/Math.cos(r))/Math.PI)/2*Math.pow(2,z));}
+  function regionTiles(maxZ){var t=[];for(var z=REGION.minZ;z<=maxZ;z++){var x0=lon2x(REGION.W,z),x1=lon2x(REGION.E,z),y0=lat2y(REGION.N,z),y1=lat2y(REGION.S,z);for(var x=x0;x<=x1;x++)for(var y=y0;y<=y1;y++)t.push(z+'/'+x+'/'+y);}return t;}
+  function dlBar(show){
+    var d=document.getElementById('dlbar');
+    if(!d&&show){d=document.createElement('div');d.id='dlbar';
+      d.style.cssText='position:fixed;left:50%;bottom:16px;transform:translateX(-50%);background:#171a21;border:1px solid #262b36;border-radius:10px;padding:9px 13px;z-index:10000;font-size:13px;color:#e7ebf3;display:flex;align-items:center;gap:11px;max-width:92%';
+      d.innerHTML='<span id="dltxt">Загрузка карты…</span><div style="width:130px;height:6px;background:#0b0d11;border-radius:3px;overflow:hidden"><div id="dlfill" style="height:100%;width:0;background:#4f9cff;transition:width .2s"></div></div><button id="dlstop" style="background:#222835;border:1px solid #2a313a;color:#e7ebf3;border-radius:7px;padding:4px 9px;cursor:pointer">Стоп</button>';
+      document.body.appendChild(d);document.getElementById('dlstop').onclick=function(){dlCancel=true;};}
+    if(d)d.style.display=show?'flex':'none';
+  }
+  function dlProgress(done,total){var p=total?Math.round(done/total*100):0;var t=document.getElementById('dltxt'),f=document.getElementById('dlfill');if(t)t.textContent='Карта региона: '+p+'% ('+done+'/'+total+')';if(f)f.style.width=p+'%';}
+  function downloadRegion(maxZ){
+    if(dlRunning){dlCancel=true;return;}
+    if(!('caches' in window)){toast('Офлайн-кеш недоступен в этом браузере');return;}
+    maxZ=maxZ||REGION.maxZ;
+    var tiles=regionTiles(maxZ),total=tiles.length;
+    if(!confirm('Скачать карту Брянской области для офлайна?\n≈'+total+' тайлов (≈'+Math.round(total*0.015)+' МБ). Лучше по Wi-Fi.'))return;
+    dlRunning=true;dlCancel=false;dlBar(true);
+    var b=document.getElementById('dlBtn');if(b)b.classList.add('on');
+    caches.open('azimut-region').then(function(cache){
+      var queue=tiles.slice(),done=0,ok=0,active=0,conc=2,retried={};
+      function finish(){dlRunning=false;dlBar(false);
+        if(dlCancel){toast('Остановлено ('+ok+' из '+total+' тайлов в кеше)');}
+        else if(ok>=total*0.9){toast('Карта региона загружена ✓ ('+ok+' тайлов)');try{localStorage.setItem('regionPreloaded','1');}catch(e){}}
+        else{toast('Загружено '+ok+' из '+total+' (часть докешируется при просмотре)');}
+        var bb=document.getElementById('dlBtn');if(bb)bb.classList.toggle('on',!dlCancel&&ok>=total*0.9);
+      }
+      function fetchTile(url){return new Promise(function(res){
+        var c=('AbortController' in window)?new AbortController():null;
+        var to=setTimeout(function(){if(c){try{c.abort();}catch(e){}}res(null);},9000);
+        fetch(url,{mode:'no-cors',signal:c?c.signal:undefined}).then(function(r){clearTimeout(to);res(r);}).catch(function(){clearTimeout(to);res(null);});
+      });}
+      function pump(){
+        if(dlCancel){if(active===0)finish();return;}
+        if(queue.length===0){if(active===0)finish();return;}
+        var key=queue.shift();active++;
+        var url='https://tile.openstreetmap.org/'+key+'.png';
+        cache.match(url).then(function(hit){
+          if(hit){done++;ok++;active--;dlProgress(done,total);setTimeout(pump,0);return;}
+          fetchTile(url).then(function(r){
+            if(r){cache.put(url,r).then(function(){ok++;}).catch(function(){}).then(function(){done++;active--;dlProgress(done,total);setTimeout(pump,120);});}
+            else{ if(!retried[key]){retried[key]=1;queue.push(key);} else {done++;dlProgress(done,total);} active--;setTimeout(pump,300);}
+          });
+        });
+      }
+      dlProgress(0,total);for(var k=0;k<conc;k++)pump();
+    });
+  }
+  window.downloadRegion=downloadRegion;
+
   function initMap(){
     map=L.map('map',{preferCanvas:true,zoomControl:true,attributionControl:true,worldCopyJump:true}).setView([53.243,34.363],12);
     map.attributionControl.setPrefix(false);

@@ -7,10 +7,11 @@
    - сторонние ресурсы (тайлы OpenStreetMap): cache-first
      с дозаписью в рантайм-кеш -> уже просмотренные тайлы доступны офлайн.
 */
-const VERSION = 'v12';
+const VERSION = 'v13';
 const APP_CACHE = 'azimut-app-' + VERSION;
 const DATA_CACHE = 'azimut-data-' + VERSION;
 const RUNTIME_CACHE = 'azimut-runtime-' + VERSION;
+const REGION_CACHE = 'azimut-region'; // предзагруженные тайлы региона — НЕ версионируем и не чистим
 const RUNTIME_MAX = 1200; // лимит записей рантайм-кеша (тайлы карты и т.п.)
 
 const APP_SHELL = [
@@ -40,7 +41,7 @@ self.addEventListener('install', (event) => {
 
 self.addEventListener('activate', (event) => {
   event.waitUntil((async () => {
-    const keep = new Set([APP_CACHE, DATA_CACHE, RUNTIME_CACHE]);
+    const keep = new Set([APP_CACHE, DATA_CACHE, RUNTIME_CACHE, REGION_CACHE]);
     const keys = await caches.keys();
     await Promise.all(keys.map((k) => keep.has(k) ? null : caches.delete(k)));
     await self.clients.claim();
@@ -91,6 +92,9 @@ async function staleWhileRevalidate(req, cacheName, ignoreSearch) {
 }
 
 async function cacheFirstRuntime(req) {
+  const region = await caches.open(REGION_CACHE);
+  const pre = await region.match(req, { ignoreSearch: true });
+  if (pre) return pre;
   const cache = await caches.open(RUNTIME_CACHE);
   const cached = await cache.match(req);
   if (cached) return cached;
