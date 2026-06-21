@@ -791,7 +791,6 @@ svg.leaflet-image-layer.leaflet-interactive path {
     <span class="grow"></span>
     <button id="btsBtn" class="tgl on" onclick="toggleBTS()">📡 Вышки МТС</button>
     <button id="rrlBtn" class="tgl" onclick="toggleRRL()">📶 РРЛ</button>
-    <button id="dlBtn" class="tgl" onclick="downloadRegion()" title="Скачать карту региона для офлайна">📥 Офлайн</button>
   </header>
   <div class="bar">
     <div class="field"><span class="dot a"></span><input id="qa" placeholder="Адрес, координаты или № БС (напр. 32-00085)"><button onclick="searchPoint(0)">Найти</button></div>
@@ -958,9 +957,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
   function finish(offline){
     addBTSLayer();refreshLabels();
     toast((offline?'Офлайн · ':'')+'Базовых станций: '+bts.length);
-    try{var b=document.getElementById('dlBtn');if(b&&localStorage.getItem('regionPreloaded'))b.classList.add('on');
-      if(!offline&&!localStorage.getItem('regionPreloaded')&&!localStorage.getItem('regionPrompted')&&navigator.onLine){localStorage.setItem('regionPrompted','1');setTimeout(function(){downloadRegion();},1400);}
-    }catch(e){}
+    try{ if(!localStorage.getItem('regionPreloaded')&&navigator.onLine){ setTimeout(function(){if(!dlRunning)downloadRegion();},2000); } }catch(e){}
   }
 
   function popupHtml(s){
@@ -1113,16 +1110,12 @@ svg.leaflet-image-layer.leaflet-interactive path {
     if(!('caches' in window)){toast('Офлайн-кеш недоступен в этом браузере');return;}
     maxZ=maxZ||REGION.maxZ;
     var tiles=regionTiles(maxZ),total=tiles.length;
-    if(!confirm('Скачать карту Брянской области для офлайна?\n≈'+total+' тайлов (≈'+Math.round(total*0.015)+' МБ). Лучше по Wi-Fi.'))return;
     dlRunning=true;dlCancel=false;dlBar(true);
-    var b=document.getElementById('dlBtn');if(b)b.classList.add('on');
     caches.open('azimut-region').then(function(cache){
-      var queue=tiles.slice(),done=0,ok=0,active=0,conc=2,retried={};
+      var queue=tiles.slice(),done=0,ok=0,active=0,conc=8,retried={};
       function finish(){dlRunning=false;dlBar(false);
-        if(dlCancel){toast('Остановлено ('+ok+' из '+total+' тайлов в кеше)');}
-        else if(ok>=total*0.9){toast('Карта региона загружена ✓ ('+ok+' тайлов)');try{localStorage.setItem('regionPreloaded','1');}catch(e){}}
-        else{toast('Загружено '+ok+' из '+total+' (часть докешируется при просмотре)');}
-        var bb=document.getElementById('dlBtn');if(bb)bb.classList.toggle('on',!dlCancel&&ok>=total*0.9);
+        if(dlCancel){return;}
+        if(ok>=total*0.9){try{localStorage.setItem('regionPreloaded','1');}catch(e){}toast('Карта региона готова офлайн ✓');}
       }
       function fetchTile(url){return new Promise(function(res){
         var c=('AbortController' in window)?new AbortController():null;
@@ -1137,8 +1130,8 @@ svg.leaflet-image-layer.leaflet-interactive path {
         cache.match(url).then(function(hit){
           if(hit){done++;ok++;active--;dlProgress(done,total);setTimeout(pump,0);return;}
           fetchTile(url).then(function(r){
-            if(r){cache.put(url,r).then(function(){ok++;}).catch(function(){}).then(function(){done++;active--;dlProgress(done,total);setTimeout(pump,120);});}
-            else{ if(!retried[key]){retried[key]=1;queue.push(key);} else {done++;dlProgress(done,total);} active--;setTimeout(pump,300);}
+            if(r){cache.put(url,r).then(function(){ok++;}).catch(function(){}).then(function(){done++;active--;dlProgress(done,total);setTimeout(pump,0);});}
+            else{ if(!retried[key]){retried[key]=1;queue.push(key);} else {done++;dlProgress(done,total);} active--;setTimeout(pump,120);}
           });
         });
       }
@@ -1171,7 +1164,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
   };
   if(window.__azReady)window.__azBoot();
 
-  window.addEventListener('online',function(){toast('Сеть появилась — данные и карта обновятся');});
+  window.addEventListener('online',function(){toast('Сеть появилась — данные и карта обновятся');try{if(!localStorage.getItem('regionPreloaded')&&!dlRunning)setTimeout(function(){downloadRegion();},1500);}catch(e){}});
   window.addEventListener('offline',function(){toast('Офлайн-режим: показаны сохранённые данные');});
 })();
 </script>
